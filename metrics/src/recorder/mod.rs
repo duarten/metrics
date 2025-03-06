@@ -1,7 +1,7 @@
 use std::{cell::Cell, marker::PhantomData, ptr::NonNull};
 
 mod cell;
-use self::cell::RecorderOnceCell;
+pub use self::cell::RecorderOnceCell;
 
 mod errors;
 pub use self::errors::SetRecorderError;
@@ -172,9 +172,10 @@ impl<'a> Drop for LocalRecorderGuard<'a> {
 /// An error is returned if a recorder has already been set.
 pub fn set_global_recorder<R>(recorder: R) -> Result<(), SetRecorderError<R>>
 where
-    R: Recorder + Sync + 'static,
+    R: Recorder + Send + Sync + 'static,
 {
-    GLOBAL_RECORDER.set(recorder)
+    GLOBAL_RECORDER.set(Box::new(recorder) as _).unwrap();
+    Ok(())
 }
 
 /// Sets the recorder as the default for the current thread for the duration of the lifetime of the returned

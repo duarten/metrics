@@ -17,7 +17,8 @@ use metrics_util::{
 
 use crate::util::CachePadded;
 
-pub(crate) struct AtomicCounter {
+/// An atomic counter that can be used to track a single value.
+pub struct AtomicCounter {
     //is_absolute: AtomicBool,
     //last: AtomicU64,
     current: CachePadded<AtomicU64>,
@@ -45,7 +46,7 @@ impl AtomicCounter {
 
         //(delta, updates)
         let delta = self.current.swap(0, Relaxed);
-        (delta, if delta > 0 { 1 } else { 0 })
+        (delta, u64::from(delta > 0))
     }
 }
 
@@ -70,7 +71,8 @@ impl CounterFn for AtomicCounter {
     }
 }
 
-pub(crate) struct AtomicGauge {
+/// An atomic gauge that can be used to track a single value.
+pub struct AtomicGauge {
     inner: CachePadded<AtomicU64>,
     updates: CachePadded<AtomicU64>,
 }
@@ -120,8 +122,11 @@ impl GaugeFn for AtomicGauge {
     }
 }
 
-pub(crate) enum AtomicHistogram {
+/// An atomic histogram that can be used to track a distribution of values.
+pub enum AtomicHistogram {
+    /// A raw histogram that stores all values.
     Raw(AtomicBucket<f64>),
+    /// A sampled histogram that stores a sample of values.
     Sampled(CachePadded<AtomicSamplingReservoir>),
 }
 
@@ -162,7 +167,7 @@ impl AtomicHistogram {
     /// Depending on the underlying histogram implementation, the closure may be called multiple times. Callers are
     /// responsible for using the sample rate and reported length of the iterator ([`Values<'a>`] implements
     /// [`ExactSizeIterator`]) to calculate the unsampled length of the histogram.
-    pub fn flush<F>(&self, mut f: F)
+    pub(crate) fn flush<F>(&self, mut f: F)
     where
         F: FnMut(Option<f64>, Values<'_>),
     {

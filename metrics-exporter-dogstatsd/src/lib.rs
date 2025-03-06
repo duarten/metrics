@@ -102,6 +102,7 @@ pub use self::recorder::DogStatsDRecorder;
 
 mod state;
 mod storage;
+pub use storage::{AtomicCounter, AtomicGauge, AtomicHistogram};
 mod telemetry;
 pub(crate) mod util;
 mod writer;
