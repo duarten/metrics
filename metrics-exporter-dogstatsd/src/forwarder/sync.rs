@@ -1,7 +1,9 @@
 #[cfg(target_os = "linux")]
+use std::io::Write;
+#[cfg(target_os = "linux")]
 use std::os::unix::net::{UnixDatagram, UnixStream};
 use std::{
-    io::{self, Write as _},
+    io,
     net::{Ipv4Addr, UdpSocket},
     sync::Arc,
     thread::sleep,

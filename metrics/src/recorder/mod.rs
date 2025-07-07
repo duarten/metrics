@@ -1,7 +1,7 @@
 use std::{cell::Cell, marker::PhantomData, ptr::NonNull};
 
 mod cell;
-use self::cell::RecorderOnceCell;
+pub use self::cell::RecorderOnceCell;
 
 mod errors;
 pub use self::errors::SetRecorderError;

@@ -26,6 +26,7 @@ impl RecorderOnceCell {
         Self { recorder: UnsafeCell::new(None), state: AtomicUsize::new(UNINITIALIZED) }
     }
 
+    /// Sets the recorder in the cell.
     pub fn set<R>(&self, recorder: R) -> Result<(), SetRecorderError<R>>
     where
         R: Recorder + 'static,
@@ -53,6 +54,7 @@ impl RecorderOnceCell {
         }
     }
 
+    /// Tries to load the recorder from the cell.
     pub fn try_load(&self) -> Option<&'static dyn Recorder> {
         if self.state.load(Ordering::Acquire) != INITIALIZED {
             None

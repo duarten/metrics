@@ -1,10 +1,7 @@
 use std::{
     slice::Iter,
     sync::{
-        atomic::{
-            AtomicBool, AtomicU64,
-            Ordering::{AcqRel, Acquire, Relaxed, Release},
-        },
+        atomic::{AtomicBool, AtomicU64, Ordering::Relaxed},
         Arc,
     },
 };
@@ -18,7 +15,8 @@ use metrics_util::{
     },
 };
 
-pub(crate) struct AtomicCounter {
+/// A counter that can be flushed to a DogStatsD server.
+pub struct AtomicCounter {
     is_absolute: AtomicBool,
     last: AtomicU64,
     current: AtomicU64,
@@ -38,19 +36,20 @@ impl AtomicCounter {
 
     /// Flushes the current counter value, returning the delta of the counter value, and the number of updates, since
     /// the last flush.
-    pub fn flush(&self) -> (u64, u64) {
-        let current = self.current.load(Acquire);
-        let last = self.last.swap(current, AcqRel);
+    pub(crate) fn flush(&self) -> (u64, u64) {
+        let current = self.current.load(Relaxed);
+        let last = self.last.swap(current, Relaxed);
         let delta = current.wrapping_sub(last);
-        let updates = self.updates.swap(0, AcqRel);
+        let updates = self.updates.swap(0, Relaxed);
 
         (delta, updates)
     }
 }
 
 impl CounterFn for AtomicCounter {
+    #[inline(always)]
     fn increment(&self, value: u64) {
-        self.is_absolute.store(false, Release);
+        self.is_absolute.store(false, Relaxed);
         self.current.fetch_add(value, Relaxed);
         self.updates.fetch_add(1, Relaxed);
     }
@@ -60,16 +59,17 @@ impl CounterFn for AtomicCounter {
         // consistent starting point when flushing. This ensures that we only start flushing deltas once we've gotten
         // two consecutive absolute values, since otherwise we might be calculating a delta between a `last` of 0 and a
         // very large `current` value.
-        if !self.is_absolute.swap(true, Release) {
-            self.last.store(value, Release);
+        if !self.is_absolute.swap(true, Relaxed) {
+            self.last.store(value, Relaxed);
         }
 
-        self.current.store(value, Release);
+        self.current.store(value, Relaxed);
         self.updates.fetch_add(1, Relaxed);
     }
 }
 
-pub(crate) struct AtomicGauge {
+/// A gauge that can be flushed to a DogStatsD server.
+pub struct AtomicGauge {
     inner: AtomicU64,
     updates: AtomicU64,
 }
@@ -81,9 +81,9 @@ impl AtomicGauge {
     }
 
     /// Flushes the current gauge value and the number of updates since the last flush.
-    pub fn flush(&self) -> (f64, u64) {
-        let current = f64::from_bits(self.inner.load(Acquire));
-        let updates = self.updates.swap(0, AcqRel);
+    pub(crate) fn flush(&self) -> (f64, u64) {
+        let current = f64::from_bits(self.inner.load(Relaxed));
+        let updates = self.updates.swap(0, Relaxed);
 
         (current, updates)
     }
@@ -92,7 +92,7 @@ impl AtomicGauge {
 impl GaugeFn for AtomicGauge {
     fn increment(&self, value: f64) {
         self.inner
-            .fetch_update(AcqRel, Relaxed, |current| {
+            .fetch_update(Relaxed, Relaxed, |current| {
                 let new = f64::from_bits(current) + value;
                 Some(f64::to_bits(new))
             })
@@ -102,7 +102,7 @@ impl GaugeFn for AtomicGauge {
 
     fn decrement(&self, value: f64) {
         self.inner
-            .fetch_update(AcqRel, Relaxed, |current| {
+            .fetch_update(Relaxed, Relaxed, |current| {
                 let new = f64::from_bits(current) - value;
                 Some(f64::to_bits(new))
             })
@@ -111,13 +111,16 @@ impl GaugeFn for AtomicGauge {
     }
 
     fn set(&self, value: f64) {
-        self.inner.store(value.to_bits(), Release);
+        self.inner.store(value.to_bits(), Relaxed);
         self.updates.fetch_add(1, Relaxed);
     }
 }
 
-pub(crate) enum AtomicHistogram {
+/// A histogram that can be flushed to a DogStatsD server.
+pub enum AtomicHistogram {
+    /// A raw histogram that stores all values.
     Raw(AtomicBucket<f64>),
+    /// A sampled histogram that stores a sample of the values.
     Sampled(AtomicSamplingReservoir),
 }
 
@@ -158,7 +161,7 @@ impl AtomicHistogram {
     /// Depending on the underlying histogram implementation, the closure may be called multiple times. Callers are
     /// responsible for using the sample rate and reported length of the iterator ([`Values<'a>`] implements
     /// [`ExactSizeIterator`]) to calculate the unsampled length of the histogram.
-    pub fn flush<F>(&self, mut f: F)
+    pub(crate) fn flush<F>(&self, mut f: F)
     where
         F: FnMut(Option<f64>, Values<'_>),
     {

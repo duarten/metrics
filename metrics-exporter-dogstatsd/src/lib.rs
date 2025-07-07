@@ -104,3 +104,5 @@ mod state;
 mod storage;
 mod telemetry;
 mod writer;
+
+pub use storage::{AtomicCounter, AtomicGauge, AtomicHistogram};
